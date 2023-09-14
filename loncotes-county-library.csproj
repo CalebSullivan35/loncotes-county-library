@@ -2,7 +2,6 @@
 
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
-    <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>loncotes_county_library</RootNamespace>
     <UserSecretsId>5d608f44-aa78-440f-9ed3-762b1a402463</UserSecretsId>

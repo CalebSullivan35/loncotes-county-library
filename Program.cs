@@ -2,6 +2,7 @@ using LoncotesLibrary.Models;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http.Json;
+using loncotes_county_library.Migrations;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -64,8 +65,7 @@ app.MapGet("/api/materials/{id}", (LoncotesLibraryDbContext db, int id) =>
     .Include(m => m.MaterialType)
     .Include(m => m.Checkouts)
     .ThenInclude(c => c.Patron)
-    .Where(m => m.Id == id)
-    .ToList();    
+    .SingleOrDefault(m => m.Id == id);
 });
 
 app.MapPost("/api/materials", (LoncotesLibraryDbContext db, Material material) =>
@@ -103,20 +103,24 @@ app.MapGet("/api/genres", (LoncotesLibraryDbContext db) =>
 // The librarians want to see a list of library patrons.
 app.MapGet("/api/patrons", (LoncotesLibraryDbContext db) =>
 {
-    return db.Patrons;
+
+    return db.Patrons
+    .Include(p => p.checkouts)
+    .ThenInclude(c => c.Material)
+    .ThenInclude(m => m.MaterialType);
 });
 
 // This endpoint should get a patron and include their checkouts, and further include the materials and their material types.
-app.MapGet("/api/patron/{id}", (LoncotesLibraryDbContext db, int id) =>
+app.MapGet("/api/patrons/{id}", (LoncotesLibraryDbContext db, int id) =>
 {
     return db.Patrons
     .Include(p => p.checkouts)
     .ThenInclude(c => c.Material)
     .ThenInclude(m => m.MaterialType)
-    .Where(p => p.Id == id);
+    .SingleOrDefault(p => p.Id == id);
 });
 // Sometimes patrons move or change their email address. Add an endpoint that updates these properties only.
-app.MapPut("/api/patron/{id}/updateEmail", (LoncotesLibraryDbContext db, int id, Patron updatedPatron) =>
+app.MapPut("/api/patrons/{id}/update", (LoncotesLibraryDbContext db, int id, Patron updatedPatron) =>
 {
     //get the specific patron we are updating.
     Patron patron = db.Patrons.SingleOrDefault(p => p.Id == id);
@@ -125,6 +129,7 @@ app.MapPut("/api/patron/{id}/updateEmail", (LoncotesLibraryDbContext db, int id,
         return Results.NotFound();
     }
     patron.Email = updatedPatron.Email;
+    patron.Address = updatedPatron.Address;
     db.SaveChanges();
     return Results.Ok(patron);
 });
@@ -180,6 +185,28 @@ app.MapPut("/api/checkouts/{id}/returned", (LoncotesLibraryDbContext db, int id)
 app.MapGet("/api/checkouts", (LoncotesLibraryDbContext db) =>
 {
     return db.Checkouts;
+});
+
+//re read over these two endpoints.
+app.MapGet("/materials/available", (LoncotesLibraryDbContext db) =>
+{
+    return db.Materials
+    .Where(m => m.OutOfCirculationSince == null)
+    .Where(m => m.Checkouts.All(co => co.ReturnDate != null))
+    .ToList();
+});
+
+app.MapGet("/checkouts/overdue", (LoncotesLibraryDbContext db) =>
+{
+    return db.Checkouts
+    .Include(p => p.Patron)
+    .Include(co => co.Material)
+    .ThenInclude(m => m.MaterialType)
+    .Where(co =>
+        (DateTime.Today - co.CheckoutDate).Days > 
+        co.Material.MaterialType.CheckoutDays &&
+        co.ReturnDate == null)
+    .ToList();
 });
 
 app.Run();
